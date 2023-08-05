@@ -8,18 +8,21 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 )
 
 // worker is a function for process values from channel. All worker have id.
-func worker(ctx context.Context, ch <-chan int, id int) {
+func worker(ctx context.Context, wg *sync.WaitGroup, ch <-chan int, id int) {
 	for {
 		select {
 		case val := <-ch:
 			fmt.Printf("Worker %d: %d\n", id, val)
 		case <-ctx.Done():
 			fmt.Printf("Worker %d finished\n", id)
+			wg.Done()
+			return
 		}
 	}
 }
@@ -30,6 +33,7 @@ func main() {
 		err         error
 	)
 	ch := make(chan int)
+	wg := sync.WaitGroup{}
 
 	// create context and function cancel
 	ctx, cansel := context.WithCancel(context.Background())
@@ -47,7 +51,8 @@ func main() {
 
 	// start workers
 	for i := 0; i < countWorker; i++ {
-		go worker(ctx, ch, i)
+		wg.Add(1)
+		go worker(ctx, &wg, ch, i)
 	}
 
 	// function for add values in channel
@@ -64,6 +69,6 @@ func main() {
 	<-gracefulShotDown
 
 	cansel()
-	close(ch)
 	fmt.Println("Program was finished")
+	wg.Wait()
 }
